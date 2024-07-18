@@ -1,13 +1,16 @@
-﻿using Bulky.DataAccess.Data;
-using Bulky.DataAccess.Repository;
-using Bulky.DataAccess.Repository.IRepository;
+﻿using Bulky.DataAccess.Repository.IRepository;
 using Bulky.Models;
 using Bulky.Models.ViewModels;
 using Bulky.Utility;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using System.Collections.Generic;
+using Microsoft.AspNetCore.Hosting;
+using System.Data;
+using Bulky.DataAccess.Data;
+using System.Collections.Generic;   
+
+
 
 namespace BulkyWeb.Areas.Admin.Controllers
 {
@@ -16,84 +19,82 @@ namespace BulkyWeb.Areas.Admin.Controllers
     public class ProductController : Controller
     {
         private readonly IUnitOfWork _unitofwork;
-        public ProductController(IUnitOfWork db)
+        private readonly IWebHostEnvironment _webHostEnvironment;
+        public ProductController(IUnitOfWork db, IWebHostEnvironment webHostEnvironment)
         {
             _unitofwork = db;
-        }
-        public IActionResult Index()
+			_webHostEnvironment = webHostEnvironment;
+
+		}
+		public IActionResult Index()
         {
             List<Product> objProductList = _unitofwork.Product.GetAll().ToList();
 
-			return View(objProductList);
+            return View(objProductList);
         }
 
-        public IActionResult Create()
+        public IActionResult Upsert(int? id)
         {
+
             ProductVM productVM = new()
             {
                 CategoryList = _unitofwork.Category.GetAll().Select(u => new SelectListItem
-				{
-					Text = u.Name,
-					Value = u.Id.ToString()
-				}),
+                {
+                    Text = u.Name,
+                    Value = u.Id.ToString()
+                }),
                 Product = new Product()
             };
-			return View(productVM);
+
+
+            if (id == null || id == 0)
+            {
+                return View(productVM);
+            }
+
+            else
+            {
+                productVM.Product = _unitofwork.Product.Get(u => u.Id == id);     //Find() only works with Primary Key
+                return View(productVM);
+            }
         }
+
+
+
         [HttpPost]
-        public IActionResult Create( ProductVM obj)
+        public IActionResult Upsert(ProductVM productVM, IFormFile? file)
         {
 
             if (ModelState.IsValid)
             {
-                _unitofwork.Product.Add(obj.Product);
+                string wwwRootPath = _webHostEnvironment.WebRootPath;
+
+                if (file != null)
+                {
+                    string filename = Guid.NewGuid().ToString() + Path.GetExtension(file.FileName);
+                    string productPath = Path.Combine(wwwRootPath, @"images\product");
+
+                    using (var fileStream = new FileStream(Path.Combine(productPath, filename), FileMode.Create)) { 
+                    
+                        file.CopyTo(fileStream); 
+                    }
+                    productVM.Product.ImageUrl = @"\images\product\" + filename;
+                }
+
+                _unitofwork.Product.Add(productVM.Product);
                 _unitofwork.Save();
                 TempData["success"] = "Product Created Successfully";
                 return RedirectToAction("Index", "Product");
             }
+            
             return View();
         }
 
 
 
-
-        public IActionResult Edit(int? id)
-        {
-
-            if (id == null || id == 0)
-            {
-                return NotFound();
-            }
-            Product? productfromDb = _unitofwork.Product.Get(u => u.Id == id);     //Find() only works with Primary Key
-                                                                                      //Category? categoryfromDb1 = _db.Categories.FirstorDefault(u=>u.Id=id);
-                                                                                      //Category? categoryfromDb2 = _db.Categories.Where(u=>u.Id == id).FirstorDefault();
-
-            if (productfromDb == null)
-            {
-                return NotFound();
-            }
-
-            return View(productfromDb);
-        }
-
-        [HttpPost]
-        public IActionResult Edit(ProductVM obj)
-        {
-
-            if (ModelState.IsValid)
-            {
-                _unitofwork.Product.Update(obj.Product);
-                _unitofwork.Save();
-                TempData["success"] = "Product Edited Successfully";
-                return RedirectToAction("Index", "Product");
-            }
-            return View();  
-        }
-
         [HttpPost, ActionName("Delete")]
         public IActionResult DeletePOST(int? id)
         {
-
             Product? categoryfromDb = _unitofwork.Product.Get(u => u.Id == id);
 
             if (categoryfromDb == null)
@@ -107,4 +108,6 @@ namespace BulkyWeb.Areas.Admin.Controllers
             return RedirectToAction("Index", "Product");
         }
     }
+
+
 }

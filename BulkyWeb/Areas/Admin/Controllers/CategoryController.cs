@@ -28,13 +28,14 @@ namespace BulkyWeb.Areas.Admin.Controllers
         {
             return View();
         }
+
+
         [HttpPost]
         public IActionResult Create(Category obj)
         {
 
             if (obj.Name == obj.DisplayOrder.ToString())
             {
-
                 ModelState.AddModelError("name", "the displayorder must match the name exactly. ");
             }
 
